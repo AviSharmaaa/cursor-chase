@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="tE dE">
+    <title id="tE">Cursor Chase Icon E</title>
+    <desc id="dE">CC monogram with a chasing dot.</desc>
+    <style>
+        :root{ --bg:#0b1220; --stroke:#ffffff; --accent:#fe456c; }
+    </style>
+    <rect x="8" y="8" width="240" height="240" rx="48" fill="var(--bg)" />
+    <!-- double C -->
+    <path d="M170 88a60 60 0 1 0 0 80" fill="none" stroke="var(--stroke)" stroke-width="12"
+        stroke-linecap="round" stroke-linejoin="round" opacity=".9" />
+    <path d="M182 76a76 76 0 1 0 0 104" fill="none" stroke="var(--stroke)" stroke-width="12"
+        stroke-linecap="round" stroke-linejoin="round" opacity=".3" />
+    <!-- chase dot -->
+    <circle cx="186" cy="128" r="12" fill="var(--accent)" />
+</svg>

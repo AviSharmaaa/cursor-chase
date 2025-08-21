@@ -1,0 +1,9 @@
+export const CURSOR_R = 12; // radius of the invisible player circle following the mouse pointer
+export const CHASER_R = 18; // radius of the enemy that chases the cursor
+export const CHASER_SPEED_BASE = 250; // px/sec
+export const CHASER_SPEED_PER_POINT = 6; // small speed ramp per score
+export const TARGET_MIN_R = 8;
+export const TARGET_MAX_R = 16;
+export const SPAWN_MIN = 0.6; // seconds
+export const SPAWN_MAX = 1.4; // seconds
+export const SAFE_RADIUS = 80; // don't spawn targets too close to player or chaser
