@@ -7,3 +7,4 @@ export const TARGET_MAX_R = 16;
 export const SPAWN_MIN = 0.6; // seconds
 export const SPAWN_MAX = 1.4; // seconds
 export const SAFE_RADIUS = 80; // don't spawn targets too close to player or chaser
+export const CURSOR_VISUAL_MAX_WIDTH = 768;

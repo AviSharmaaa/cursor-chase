@@ -29,6 +29,8 @@ export default function CursorChaseGame() {
   const nextSpawnAtRef = useRef(0);
   const lastTimeRef = useRef<number | null>(null);
   const idCounterRef = useRef(1);
+  const isSmallRef = useRef(false);
+  const speedScaleRef = useRef(1);
 
   // --- Animation frame control ---
   const rafRef = useRef<number | null>(null);
@@ -38,6 +40,25 @@ export default function CursorChaseGame() {
   useEffect(() => {
     runningRef.current = isRunning && !isGameOver;
   }, [isRunning, isGameOver]);
+
+  useEffect(() => {
+    const coarse = window.matchMedia("(pointer: coarse)");
+    const small = window.matchMedia("(max-width: 768px)");
+
+    const update = () => {
+      isSmallRef.current = small.matches;
+      speedScaleRef.current = coarse.matches ? 0.75 : small.matches ? 0.85 : 1;
+    };
+
+    update();
+    const onChange = () => update();
+    coarse.addEventListener?.("change", onChange);
+    small.addEventListener?.("change", onChange);
+    return () => {
+      coarse.removeEventListener?.("change", onChange);
+      small.removeEventListener?.("change", onChange);
+    };
+  }, []);
 
   // --- Resize canvas to full window ---
   useEffect(() => {
@@ -148,6 +169,11 @@ export default function CursorChaseGame() {
         drawCircle(t.pos, t.r, "white", true);
       }
 
+      if (hasPointerRef.current && isSmallRef.current) {
+        drawCircle(cursorRef.current, CURSOR_R, "rgba(255,255,255,0.15)");
+        drawCircle(cursorRef.current, 3, "white");
+      }
+
       // Chaser
       drawCircle(chaserRef.current, CHASER_R, "#fe456c", true);
     };
@@ -165,7 +191,7 @@ export default function CursorChaseGame() {
       const dx = target.x - chaser.x;
       const dy = target.y - chaser.y;
       const len = Math.hypot(dx, dy) || 1;
-      const speed = CHASER_SPEED_BASE + score * CHASER_SPEED_PER_POINT;
+      const speed = (CHASER_SPEED_BASE + score * CHASER_SPEED_PER_POINT) * speedScaleRef.current;
       const step = Math.min(len, speed * dt);
       chaser.x += (dx / len) * step;
       chaser.y += (dy / len) * step;
