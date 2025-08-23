@@ -10,6 +10,9 @@ import {
   CHASER_SPEED_BASE,
   CHASER_SPEED_PER_POINT,
   ORB_GLOW_MULTIPLIER,
+  PARTICLE_LIFETIME,
+  PARTICLE_SIZE,
+  PARTICLE_PER_FRAME,
 } from "@/lib/constants";
 import {
   rand,
@@ -38,6 +41,7 @@ export default function CursorChaseGame() {
   const idCounterRef = useRef(1);
   const isSmallRef = useRef(false);
   const speedScaleRef = useRef(1);
+  const particlesRef = useRef<Particle[]>([]);
 
   // --- Animation frame control ---
   const rafRef = useRef<number | null>(null);
@@ -209,6 +213,23 @@ export default function CursorChaseGame() {
       ctx.shadowBlur = 0;
     };
 
+    const drawParticles = (ctx: CanvasRenderingContext2D) => {
+      const dpr = dprRef.current;
+
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
+
+      for (const p of particlesRef.current) {
+        const alpha = Math.max(0, p.life / PARTICLE_LIFETIME); // fade out
+        const size = PARTICLE_SIZE * alpha * dpr;
+
+        ctx.beginPath();
+        ctx.arc(p.x * dpr, p.y * dpr, size, 0, Math.PI * 2);
+        ctx.fillStyle = p.color.replace(/[\d.]+\)$/g, `${alpha})`); // adjust alpha
+        ctx.fill();
+      }
+    };
+
     const draw = (nowSec: number) => {
       const { w, h } = sizeRef.current;
       const dpr = dprRef.current;
@@ -217,6 +238,8 @@ export default function CursorChaseGame() {
       // Background
       ctx.fillStyle = "#000000";
       ctx.fillRect(0, 0, w * dpr, h * dpr);
+
+      drawParticles(ctx);
 
       // Targets (use pulsing glow)
       for (const t of targetsRef.current) {
@@ -229,7 +252,7 @@ export default function CursorChaseGame() {
       }
 
       // Chaser
-      drawCircle(chaserRef.current, CHASER_R, "#fe456c", true);
+      drawCircle(chaserRef.current, CHASER_R, "#fe456c", false);
     };
 
     const update = (dt: number, nowSec: number) => {
@@ -251,6 +274,28 @@ export default function CursorChaseGame() {
       const step = Math.min(len, speed * dt);
       chaser.x += (dx / len) * step;
       chaser.y += (dy / len) * step;
+
+      // Spawn chaser trail
+      if (hasPointerRef.current && Math.random() < 0.3) {
+        for (let i = 0; i < PARTICLE_PER_FRAME; i++) {
+          particlesRef.current.push({
+            x: chaserRef.current.x,
+            y: chaserRef.current.y,
+            vx: (Math.random() - 0.5) * 30,
+            vy: (Math.random() - 0.5) * 30,
+            life: PARTICLE_LIFETIME,
+            color: "rgba(254,69,108,0.9)", // matches chaser pink-red
+          });
+        }
+      }
+
+      // Update particles
+      particlesRef.current = particlesRef.current.filter((p) => {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.life -= dt;
+        return p.life > 0;
+      });
 
       // Clamp inside screen
       const { w, h } = sizeRef.current;

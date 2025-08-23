@@ -11,3 +11,8 @@ export const CURSOR_VISUAL_MAX_WIDTH = 768;
 export const ORB_PULSE_AMPLITUDE = 0.15;   // ±15% size
 export const ORB_PULSE_SPEED = 2.5;        // radians/sec
 export const ORB_GLOW_MULTIPLIER = 1.8;    // halo size vs current radius
+
+// Particle system
+export const PARTICLE_LIFETIME = 1;    // seconds
+export const PARTICLE_SIZE = 9;          // base radius
+export const PARTICLE_PER_FRAME = 1;     // how many spawn per entity per frame

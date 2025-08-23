@@ -10,3 +10,12 @@ interface TargetBall {
   pulsePhase: number; // random phase so each orb pulses out of sync
   color: string;
 }
+
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number; // seconds left
+  color: string;
+}
