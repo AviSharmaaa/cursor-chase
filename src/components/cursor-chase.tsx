@@ -9,8 +9,15 @@ import {
   SPAWN_MAX,
   CHASER_SPEED_BASE,
   CHASER_SPEED_PER_POINT,
+  ORB_GLOW_MULTIPLIER,
 } from "@/lib/constants";
-import { rand, dist2 } from "@/lib/utils";
+import {
+  rand,
+  dist2,
+  pickOrbColor,
+  currentOrbRadius,
+  hexToRgb,
+} from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 
 export default function CursorChaseGame() {
@@ -111,14 +118,20 @@ export default function CursorChaseGame() {
     const spawnTarget = () => {
       const { w, h } = sizeRef.current;
       for (let i = 0; i < 10; i++) {
-        const r = rand(TARGET_MIN_R, TARGET_MAX_R);
-        const pos = { x: rand(r, w - r), y: rand(r, h - r) };
+        const baseR = rand(TARGET_MIN_R, TARGET_MAX_R);
+        const pos = { x: rand(baseR, w - baseR), y: rand(baseR, h - baseR) };
         const tooCloseToCursor =
-          dist2(pos, cursorRef.current) < (SAFE_RADIUS + r + CURSOR_R) ** 2;
+          dist2(pos, cursorRef.current) < (SAFE_RADIUS + baseR + CURSOR_R) ** 2;
         const tooCloseToChaser =
-          dist2(pos, chaserRef.current) < (SAFE_RADIUS + r + CHASER_R) ** 2;
+          dist2(pos, chaserRef.current) < (SAFE_RADIUS + baseR + CHASER_R) ** 2;
         if (!tooCloseToCursor && !tooCloseToChaser) {
-          targetsRef.current.push({ id: idCounterRef.current++, pos, r });
+          targetsRef.current.push({
+            id: idCounterRef.current++,
+            pos,
+            baseR,
+            pulsePhase: Math.random() * Math.PI * 2,
+            color: pickOrbColor(),
+          });
           break;
         }
       }
@@ -155,7 +168,48 @@ export default function CursorChaseGame() {
       ctx.fill();
     };
 
-    const draw = () => {
+    const drawOrb = (
+      ctx: CanvasRenderingContext2D,
+      orb: TargetBall,
+      elapsedSec: number
+    ) => {
+      const dpr = dprRef.current;
+      const r = currentOrbRadius(orb, elapsedSec);
+
+      // Glow halo via radial gradient
+      const haloR = r * ORB_GLOW_MULTIPLIER;
+      const [cr, cg, cb] = hexToRgb(orb.color);
+      const grad = ctx.createRadialGradient(
+        orb.pos.x * dpr,
+        orb.pos.y * dpr,
+        0,
+        orb.pos.x * dpr,
+        orb.pos.y * dpr,
+        haloR * dpr
+      );
+      grad.addColorStop(0.0, `rgba(${cr},${cg},${cb},0.9)`);
+      grad.addColorStop(0.6, `rgba(${cr},${cg},${cb},0.25)`);
+      grad.addColorStop(1.0, `rgba(${cr},${cg},${cb},0.0)`);
+
+      const prevOp = ctx.globalCompositeOperation;
+      ctx.globalCompositeOperation = "lighter";
+      ctx.beginPath();
+      ctx.arc(orb.pos.x * dpr, orb.pos.y * dpr, haloR * dpr, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.globalCompositeOperation = prevOp;
+
+      // Core circle
+      ctx.beginPath();
+      ctx.arc(orb.pos.x * dpr, orb.pos.y * dpr, r * dpr, 0, Math.PI * 2);
+      ctx.fillStyle = orb.color;
+      ctx.shadowColor = orb.color;
+      ctx.shadowBlur = Math.max(6, r * 0.6) * dpr;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    };
+
+    const draw = (nowSec: number) => {
       const { w, h } = sizeRef.current;
       const dpr = dprRef.current;
       ctx.clearRect(0, 0, w * dpr, h * dpr);
@@ -164,9 +218,9 @@ export default function CursorChaseGame() {
       ctx.fillStyle = "#000000";
       ctx.fillRect(0, 0, w * dpr, h * dpr);
 
-      // Targets
+      // Targets (use pulsing glow)
       for (const t of targetsRef.current) {
-        drawCircle(t.pos, t.r, "white", true);
+        drawOrb(ctx, t, nowSec); // <-- new (see next step)
       }
 
       if (hasPointerRef.current && isSmallRef.current) {
@@ -191,7 +245,9 @@ export default function CursorChaseGame() {
       const dx = target.x - chaser.x;
       const dy = target.y - chaser.y;
       const len = Math.hypot(dx, dy) || 1;
-      const speed = (CHASER_SPEED_BASE + score * CHASER_SPEED_PER_POINT) * speedScaleRef.current;
+      const speed =
+        (CHASER_SPEED_BASE + score * CHASER_SPEED_PER_POINT) *
+        speedScaleRef.current;
       const step = Math.min(len, speed * dt);
       chaser.x += (dx / len) * step;
       chaser.y += (dy / len) * step;
@@ -203,10 +259,10 @@ export default function CursorChaseGame() {
 
       // Check collisions: cursor with targets
       const cPos = cursorRef.current;
-      const rr = (r: number) => (r + CURSOR_R) * (r + CURSOR_R);
       let removed = 0;
       targetsRef.current = targetsRef.current.filter((t) => {
-        const hit = dist2(t.pos, cPos) <= rr(t.r);
+        const r = currentOrbRadius(t, nowSec);
+        const hit = dist2(t.pos, cPos) <= (r + CURSOR_R) * (r + CURSOR_R);
         if (hit) removed++;
         return !hit;
       });
@@ -234,7 +290,7 @@ export default function CursorChaseGame() {
       lastTimeRef.current = timeMs;
 
       update(dt, nowSec);
-      draw();
+      draw(nowSec);
       rafRef.current = requestAnimationFrame(loop); // store id for cancel
     };
 

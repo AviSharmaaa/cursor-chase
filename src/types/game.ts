@@ -6,5 +6,7 @@ interface Vec {
 interface TargetBall {
   id: number;
   pos: Vec;
-  r: number;
+  baseR: number; // immutable base radius
+  pulsePhase: number; // random phase so each orb pulses out of sync
+  color: string;
 }
