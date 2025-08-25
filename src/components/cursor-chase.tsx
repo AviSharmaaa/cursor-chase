@@ -1,4 +1,5 @@
 "use client";
+import { playDing, resumeAudio } from "@/lib/audio-utils";
 import {
   TARGET_MIN_R,
   TARGET_MAX_R,
@@ -13,6 +14,8 @@ import {
   PARTICLE_LIFETIME,
   PARTICLE_SIZE,
   PARTICLE_PER_FRAME,
+  GAMEOVER_SFX_VOL,
+  GAMEOVER_SFX_URL,
 } from "@/lib/constants";
 import {
   rand,
@@ -42,10 +45,43 @@ export default function CursorChaseGame() {
   const isSmallRef = useRef(false);
   const speedScaleRef = useRef(1);
   const particlesRef = useRef<Particle[]>([]);
+  const playedGameOverRef = useRef(false); // ensure one-shot
+  const gameOverSfxPoolRef = useRef<HTMLAudioElement[]>([]);
+  const gameOverSfxIdxRef = useRef(0);
 
   // --- Animation frame control ---
   const rafRef = useRef<number | null>(null);
   const runningRef = useRef(false);
+
+  function playGameOverSfx() {
+    const pool = gameOverSfxPoolRef.current;
+    if (!pool.length) return;
+    const el = pool[gameOverSfxIdxRef.current++ % pool.length];
+    try {
+      el.currentTime = 0; // restart
+      el.play().catch(() => {}); // ignore autoplay errors just in case
+    } catch {}
+  }
+
+  useEffect(() => {
+    const POOL = 4; // a few clones so rapid replays don’t cut off
+    gameOverSfxPoolRef.current = Array.from({ length: POOL }, () => {
+      const el = new Audio(GAMEOVER_SFX_URL);
+      el.preload = "auto";
+      el.crossOrigin = "anonymous";
+      el.volume = GAMEOVER_SFX_VOL;
+      return el;
+    });
+    return () => {
+      gameOverSfxPoolRef.current.forEach((el) => {
+        try {
+          el.pause();
+          el.src = "";
+        } catch {}
+      });
+      gameOverSfxPoolRef.current = [];
+    };
+  }, []);
 
   // Keep runningRef in sync with latest state so RAF loop doesn't see stale values
   useEffect(() => {
@@ -306,18 +342,31 @@ export default function CursorChaseGame() {
       const cPos = cursorRef.current;
       let removed = 0;
       targetsRef.current = targetsRef.current.filter((t) => {
-        const r = currentOrbRadius(t, nowSec);
+        // if you already switched to pulsing radius, use that here; else keep t.r
+        const r = (t as any).baseR
+          ? currentOrbRadius(t as any, nowSec)
+          : t.baseR;
         const hit = dist2(t.pos, cPos) <= (r + CURSOR_R) * (r + CURSOR_R);
         if (hit) removed++;
         return !hit;
       });
-      if (removed > 0) setScore((s) => s + removed);
 
+      if (removed > 0) {
+        setScore((s) => s + removed);
+        // Play a small chime per orb (slight pitch variation feels juicy)
+        for (let i = 0; i < removed; i++) {
+          playDing(820 + Math.random() * 120);
+        }
+      }
       // Check game over: chaser touches cursor
       const over = dist2(chaserRef.current, cPos) <= (CHASER_R + CURSOR_R) ** 2;
       if (over) {
         setIsGameOver(true);
         setIsRunning(false);
+        if (!playedGameOverRef.current) {
+          playGameOverSfx();
+          playedGameOverRef.current = true;
+        }
       }
     };
 
@@ -368,6 +417,8 @@ export default function CursorChaseGame() {
       rafRef.current = null;
     }
 
+    playedGameOverRef.current = false;
+
     // Place chaser away from cursor at start
     const { w, h } = sizeRef.current;
     chaserRef.current = { x: w * 0.8, y: h * 0.2 };
@@ -382,6 +433,7 @@ export default function CursorChaseGame() {
 
   const restart = () => {
     startGame();
+    resumeAudio();
   };
 
   return (
@@ -409,7 +461,10 @@ export default function CursorChaseGame() {
               the game ends.
             </p>
             <button
-              onClick={startGame}
+              onClick={() => {
+                resumeAudio();
+                startGame();
+              }}
               className="rounded-2xl bg-white px-5 py-2 font-medium text-slate-900 shadow hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-white/40"
             >
               Start
