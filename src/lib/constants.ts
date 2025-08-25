@@ -17,8 +17,11 @@ export const PARTICLE_LIFETIME = 1; // seconds
 export const PARTICLE_SIZE = 9; // base radius
 export const PARTICLE_PER_FRAME = 1; // how many spawn per entity per frame
 
-export const GAMEOVER_SFX_URL = "/audio/game-over.mp3"; // put file under /public/audio/
-export const GAMEOVER_SFX_VOL = 0.9; // 0..1
+// Game audio
+export const HIGHSCORE_KEY = "cursorchase.highscore";
+export const NEW_HIGHSCORE_SFX_URL = "/audio/new-highscore.mp3";
+export const NOT_BEST_SFX_URL = "/audio/game-over.mp3";
+export const HIGHSCORE_SFX_VOL = 0.9;
 
 // Golden orbs
 export const GOLDEN_ORB_CHANCE = 0.08; // 8% of spawns

@@ -1,7 +1,7 @@
 // --- Web Audio: tiny synth "ding" ---
 let audioCtx: AudioContext | null = null;
 
-function ensureAudio() {
+export function ensureAudio() {
   if (!audioCtx) {
     const AC = window.AudioContext || (window as any).webkitAudioContext;
     audioCtx = new AC();

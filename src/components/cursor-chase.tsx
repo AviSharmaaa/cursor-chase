@@ -1,5 +1,5 @@
 "use client";
-import { playDing, resumeAudio } from "@/lib/audio-utils";
+import { ensureAudio, playDing, resumeAudio } from "@/lib/audio-utils";
 import {
   TARGET_MIN_R,
   TARGET_MAX_R,
@@ -14,12 +14,14 @@ import {
   PARTICLE_LIFETIME,
   PARTICLE_SIZE,
   PARTICLE_PER_FRAME,
-  GAMEOVER_SFX_VOL,
-  GAMEOVER_SFX_URL,
   GOLDEN_ORB_CHANCE,
   GOLDEN_ORB_COLOR,
   GOLDEN_ORB_POINTS,
   GOLDEN_GLOW_BOOST,
+  HIGHSCORE_KEY,
+  HIGHSCORE_SFX_VOL,
+  NEW_HIGHSCORE_SFX_URL,
+  NOT_BEST_SFX_URL,
 } from "@/lib/constants";
 import {
   rand,
@@ -28,13 +30,14 @@ import {
   currentOrbRadius,
   hexToRgb,
 } from "@/lib/utils";
-import { useEffect, useRef, useState } from "react";
+import { RefObject, useEffect, useRef, useState } from "react";
 
 export default function CursorChaseGame() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [score, setScore] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [isGameOver, setIsGameOver] = useState(false);
+  const [highScore, setHighScore] = useState(0);
 
   // Store mutable game state in refs to avoid re-renders each frame
   const dprRef = useRef(1);
@@ -49,41 +52,90 @@ export default function CursorChaseGame() {
   const isSmallRef = useRef(false);
   const speedScaleRef = useRef(1);
   const particlesRef = useRef<Particle[]>([]);
-  const playedGameOverRef = useRef(false); // ensure one-shot
+  const playedGameOverRef = useRef(false);
   const gameOverSfxPoolRef = useRef<HTMLAudioElement[]>([]);
   const gameOverSfxIdxRef = useRef(0);
+  const highScoreRef = useRef(0);
+  const crossedHighRef = useRef(false);
+  const newHighPoolRef = useRef<HTMLAudioElement[]>([]);
+  const notBestPoolRef = useRef<HTMLAudioElement[]>([]);
+  const newHighIdxRef = useRef(0);
+  const notBestIdxRef = useRef(0);
+  const audioPoolsUnlockedRef = useRef(false);
 
   // --- Animation frame control ---
   const rafRef = useRef<number | null>(null);
   const runningRef = useRef(false);
 
-  function playGameOverSfx() {
-    const pool = gameOverSfxPoolRef.current;
+  function unlockAudioPools() {
+    if (audioPoolsUnlockedRef.current) return;
+    const unlock = (pool: HTMLAudioElement[]) =>
+      pool.forEach((el) => {
+        try {
+          el.muted = true;
+          el.play()
+            .then(() => {
+              el.pause();
+              el.currentTime = 0;
+              el.muted = false;
+            })
+            .catch(() => {
+              el.muted = false;
+            });
+        } catch {}
+      });
+    unlock(newHighPoolRef.current);
+    unlock(notBestPoolRef.current);
+    audioPoolsUnlockedRef.current = true;
+  }
+
+  function playFromPool(
+    poolRef: RefObject<HTMLAudioElement[]>,
+    idxRef: RefObject<number>
+  ) {
+    const pool = poolRef.current;
     if (!pool.length) return;
-    const el = pool[gameOverSfxIdxRef.current++ % pool.length];
+    const el = pool[idxRef.current++ % pool.length];
     try {
-      el.currentTime = 0; // restart
-      el.play().catch(() => {}); // ignore autoplay errors just in case
+      el.currentTime = 0;
+      el.play().catch(() => {});
     } catch {}
   }
 
+  const playNewHigh = () => playFromPool(newHighPoolRef, newHighIdxRef);
+  const playNotBest = () => playFromPool(notBestPoolRef, notBestIdxRef);
+
   useEffect(() => {
-    const POOL = 4; // a few clones so rapid replays don’t cut off
-    gameOverSfxPoolRef.current = Array.from({ length: POOL }, () => {
-      const el = new Audio(GAMEOVER_SFX_URL);
-      el.preload = "auto";
-      el.crossOrigin = "anonymous";
-      el.volume = GAMEOVER_SFX_VOL;
-      return el;
-    });
+    highScoreRef.current = highScore;
+  }, [highScore]);
+
+  useEffect(() => {
+    const saved = Number(localStorage.getItem(HIGHSCORE_KEY) || 0);
+    if (Number.isFinite(saved)) setHighScore(saved);
+  }, []);
+
+  useEffect(() => {
+    const makePool = (url: string, vol: number, n = 3) =>
+      Array.from({ length: n }, () => {
+        const el = new Audio(url);
+        el.preload = "auto";
+        el.crossOrigin = "anonymous";
+        el.volume = HIGHSCORE_SFX_VOL;
+        return el;
+      });
+
+    newHighPoolRef.current = makePool(NEW_HIGHSCORE_SFX_URL, HIGHSCORE_SFX_VOL);
+    notBestPoolRef.current = makePool(NOT_BEST_SFX_URL, HIGHSCORE_SFX_VOL);
+
     return () => {
-      gameOverSfxPoolRef.current.forEach((el) => {
+      [...newHighPoolRef.current, ...notBestPoolRef.current].forEach((el) => {
         try {
           el.pause();
           el.src = "";
         } catch {}
       });
-      gameOverSfxPoolRef.current = [];
+      newHighPoolRef.current = [];
+      notBestPoolRef.current = [];
     };
   }, []);
 
@@ -349,14 +401,14 @@ export default function CursorChaseGame() {
       chaser.x = Math.max(CHASER_R, Math.min(w - CHASER_R, chaser.x));
       chaser.y = Math.max(CHASER_R, Math.min(h - CHASER_R, chaser.y));
 
-      // Check collisions: cursor with targets
+      // --- Collect targets (cursor with targets)
       const cPos = cursorRef.current;
       let gained = 0;
       let removedTotal = 0;
       let goldenHits = 0;
 
-      targetsRef.current = targetsRef.current.filter((t) => {
-        const r = currentOrbRadius(t, nowSec);
+      targetsRef.current = targetsRef.current.filter((t: any) => {
+        const r = t.baseR ? currentOrbRadius(t, nowSec) : t.r;
         const hit = dist2(t.pos, cPos) <= (r + CURSOR_R) * (r + CURSOR_R);
         if (hit) {
           gained += t.value;
@@ -366,8 +418,12 @@ export default function CursorChaseGame() {
         return !hit;
       });
 
+      // Update score + play pickup dings
+      let nextScore = score;
+      ensureAudio();
       if (removedTotal > 0) {
-        setScore((s) => s + gained);
+        nextScore = score + gained;
+        setScore(nextScore);
 
         // Normal orbs: one ding each
         for (let i = 0; i < removedTotal - goldenHits; i++) {
@@ -385,8 +441,18 @@ export default function CursorChaseGame() {
       if (over) {
         setIsGameOver(true);
         setIsRunning(false);
+
         if (!playedGameOverRef.current) {
-          playGameOverSfx();
+          const finalScore = nextScore; // includes pickups from this frame
+          if (finalScore > highScoreRef.current) {
+            setHighScore(finalScore);
+            try {
+              localStorage.setItem(HIGHSCORE_KEY, String(finalScore));
+            } catch {}
+            playNewHigh();
+          } else {
+            playNotBest();
+          }
           playedGameOverRef.current = true;
         }
       }
@@ -439,6 +505,11 @@ export default function CursorChaseGame() {
       rafRef.current = null;
     }
 
+    resumeAudio?.(); // Web Audio (for ding)
+    unlockAudioPools?.(); // HTMLAudio pools (for game-over cues)
+
+    // reset flags
+    crossedHighRef.current = false;
     playedGameOverRef.current = false;
 
     // Place chaser away from cursor at start
@@ -455,7 +526,6 @@ export default function CursorChaseGame() {
 
   const restart = () => {
     startGame();
-    resumeAudio();
   };
 
   return (
@@ -464,6 +534,9 @@ export default function CursorChaseGame() {
       <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 z-20 flex items-center gap-4 rounded-2xl bg-white/5 px-4 py-2 backdrop-blur">
         <div className="text-sm opacity-80">Score</div>
         <div className="text-2xl font-semibold tabular-nums">{score}</div>
+        <div className="mx-2 opacity-30">•</div>
+        <div className="text-sm opacity-80">High</div>
+        <div className="text-2xl font-semibold tabular-nums">{highScore}</div>
       </div>
 
       {/* Canvas */}
@@ -484,7 +557,6 @@ export default function CursorChaseGame() {
             </p>
             <button
               onClick={() => {
-                resumeAudio();
                 startGame();
               }}
               className="rounded-2xl bg-white px-5 py-2 font-medium text-slate-900 shadow hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-white/40"
