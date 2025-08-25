@@ -3,7 +3,6 @@ let audioCtx: AudioContext | null = null;
 
 function ensureAudio() {
   if (!audioCtx) {
-    // @ts-ignore - for older Safari
     const AC = window.AudioContext || (window as any).webkitAudioContext;
     audioCtx = new AC();
   }
