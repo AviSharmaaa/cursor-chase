@@ -19,3 +19,9 @@ export const PARTICLE_PER_FRAME = 1; // how many spawn per entity per frame
 
 export const GAMEOVER_SFX_URL = "/audio/game-over.mp3"; // put file under /public/audio/
 export const GAMEOVER_SFX_VOL = 0.9; // 0..1
+
+// Golden orbs
+export const GOLDEN_ORB_CHANCE = 0.08; // 8% of spawns
+export const GOLDEN_ORB_POINTS = 5; // score value
+export const GOLDEN_ORB_COLOR = "#ffd54a"; // warm gold
+export const GOLDEN_GLOW_BOOST = 1.25; // bigger halo vs normal

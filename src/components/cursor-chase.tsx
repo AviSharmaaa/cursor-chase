@@ -16,6 +16,10 @@ import {
   PARTICLE_PER_FRAME,
   GAMEOVER_SFX_VOL,
   GAMEOVER_SFX_URL,
+  GOLDEN_ORB_CHANCE,
+  GOLDEN_ORB_COLOR,
+  GOLDEN_ORB_POINTS,
+  GOLDEN_GLOW_BOOST,
 } from "@/lib/constants";
 import {
   rand,
@@ -165,13 +169,19 @@ export default function CursorChaseGame() {
         const tooCloseToChaser =
           dist2(pos, chaserRef.current) < (SAFE_RADIUS + baseR + CHASER_R) ** 2;
         if (!tooCloseToCursor && !tooCloseToChaser) {
+          const isGolden = Math.random() < GOLDEN_ORB_CHANCE;
+          const baseR2 = baseR * (isGolden ? 1.1 : 1.0);
+
           targetsRef.current.push({
             id: idCounterRef.current++,
             pos,
-            baseR,
+            baseR: baseR2,
             pulsePhase: Math.random() * Math.PI * 2,
-            color: pickOrbColor(),
+            color: isGolden ? GOLDEN_ORB_COLOR : pickOrbColor(),
+            value: isGolden ? GOLDEN_ORB_POINTS : 1,
+            isGolden,
           });
+
           break;
         }
       }
@@ -217,7 +227,8 @@ export default function CursorChaseGame() {
       const r = currentOrbRadius(orb, elapsedSec);
 
       // Glow halo via radial gradient
-      const haloR = r * ORB_GLOW_MULTIPLIER;
+      const haloR =
+        r * ORB_GLOW_MULTIPLIER * (orb.isGolden ? GOLDEN_GLOW_BOOST : 1);
       const [cr, cg, cb] = hexToRgb(orb.color);
       const grad = ctx.createRadialGradient(
         orb.pos.x * dpr,
@@ -340,24 +351,35 @@ export default function CursorChaseGame() {
 
       // Check collisions: cursor with targets
       const cPos = cursorRef.current;
-      let removed = 0;
+      let gained = 0;
+      let removedTotal = 0;
+      let goldenHits = 0;
+
       targetsRef.current = targetsRef.current.filter((t) => {
-        // if you already switched to pulsing radius, use that here; else keep t.r
-        const r = (t as any).baseR
-          ? currentOrbRadius(t as any, nowSec)
-          : t.baseR;
+        const r = currentOrbRadius(t, nowSec);
         const hit = dist2(t.pos, cPos) <= (r + CURSOR_R) * (r + CURSOR_R);
-        if (hit) removed++;
+        if (hit) {
+          gained += t.value;
+          removedTotal++;
+          if (t.isGolden) goldenHits++;
+        }
         return !hit;
       });
 
-      if (removed > 0) {
-        setScore((s) => s + removed);
-        // Play a small chime per orb (slight pitch variation feels juicy)
-        for (let i = 0; i < removed; i++) {
+      if (removedTotal > 0) {
+        setScore((s) => s + gained);
+
+        // Normal orbs: one ding each
+        for (let i = 0; i < removedTotal - goldenHits; i++) {
           playDing(820 + Math.random() * 120);
         }
+        // Golden orbs: quick two-note arpeggio
+        for (let g = 0; g < goldenHits; g++) {
+          playDing(1400);
+          setTimeout(() => playDing(1800), 70);
+        }
       }
+
       // Check game over: chaser touches cursor
       const over = dist2(chaserRef.current, cPos) <= (CHASER_R + CURSOR_R) ** 2;
       if (over) {

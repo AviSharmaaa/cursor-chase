@@ -9,6 +9,8 @@ interface TargetBall {
   baseR: number; // immutable base radius
   pulsePhase: number; // random phase so each orb pulses out of sync
   color: string;
+  value: number;
+  isGolden: boolean;
 }
 
 interface Particle {

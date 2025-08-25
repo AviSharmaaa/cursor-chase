@@ -36,7 +36,7 @@ const ORB_COLORS = [
   "#a78bfa",
   "#f472b6",
   "#34d399",
-  "#fbbf24",
+  "#7F00FF",
 ];
 
 export function pickOrbColor() {
